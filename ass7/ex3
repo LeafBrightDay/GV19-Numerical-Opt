@@ -1,0 +1,78 @@
+%%
+clear all;
+
+phi=@(x,t) (x(1)+x(2).*t.^2).*exp(-x(3).*t);%phi(x,t)
+t_j=@(t) abs((3+150.*t.^2).*exp(-2.*t));
+x=[3,150,2];
+t=linspace(0,4,201);
+t=t(:,2:end);
+max_t=t_j(t);
+max_t=max(max_t(:));
+
+
+% maxIndex=find(p==max(p));
+% figure;
+% plot(t,p);ylabel('\phi(x,t)');xlabel('t(s)');legend('\phi(x,t)');
+% text(t(maxIndex),p(maxIndex),['(',num2str(t(maxIndex)),',',num2str(phi(maxIndex)),')'],'Color','b');
+sigma=0.05*max_t;
+n=@(t) normpdf(t,0,sigma);
+% figure;
+% plot(t,n(t));ylabel('noise');xlabel('t(s)');legend('n(t)');
+
+phi_star=n(t)+ phi(x,t);
+t=t';
+F.f = @(x) 0.5*(phi(x,t)-phi_star')'*(phi(x,t)-phi_star');
+F.J = @(x) [exp(-x(3).*t), t.^2.*exp(-x(3).*t), -t.*exp(-x(3).*t).*(x(2).*t.^2 + x(1))];
+F.r = @(x) phi(x,t)-phi_star';
+F.df= @(x) F.J(x)'*F.r(x);
+F.d2f= @(x) F.J(x)'*F.J(x);
+x0=[1;1;1];
+%% 
+%==============================
+% LM method
+%==============================
+% Trust region parameters
+maxIter = 2000;
+eta = 0.0001; 
+Delta = 0.999; 
+tol=1e-1;
+
+
+[xTR_LM, fTR_LM, nIterTR_LM, infoTR_LM] = trustRegion(F, x0,@solverCMlevenberg, Delta, eta, tol, maxIter);
+ 
+%plot
+figure;
+plot(t,phi(x,t),'-g','LineWidth',3,'MarkerSize',3);
+hold on;
+plot(t,phi(infoTR_LM.xs(:,end),t),'-b','LineWidth',2,'MarkerSize',3);
+hold on;
+plot(t,phi_star,'ob','LineWidth',2,'MarkerSize',3);
+legend('objective curve','fitted curve','measurement');
+xlabel('t(s)');ylabel('\phi(x,t)');
+%%
+%==============================
+% Gauss Newton method
+%==============================
+% Parameters
+maxIter = 100; 
+tol = 1e-4; % Stopping tolerance on relative step length between iterations
+alpha0 = 1;
+
+% Strong Wolfe LS
+lsOpts_LS.c1 = 1e-4;
+lsOpts_LS.c2 = 0.1; % 0.1 Good for Newton, 0.9 - good for steepest descent, 0.5 compromise.
+lsFunS = @(x_k, p_k, alpha0) lineSearch(F, x_k, p_k, alpha0, lsOpts_LS);
+lsFun = lsFunS;
+
+% Minimisation with Gauss-Newton method
+[xLS_g, fLS_g, nIterLS_g, infoLS_g] = descentLineSearch(F, 'gauss', lsFun, alpha0, x0, tol, maxIter); 
+
+%plot
+figure;
+plot(t,phi(x,t),'-g','LineWidth',3,'MarkerSize',3);
+hold on;
+plot(t,phi(infoLS_g.xs(:,end),t),'-b','LineWidth',2,'MarkerSize',3);
+hold on;
+plot(t,phi_star,'ob','LineWidth',2,'MarkerSize',3);
+legend('objective curve','fitted curve','measurement');
+xlabel('t(s)');ylabel('\phi(x,t)');
